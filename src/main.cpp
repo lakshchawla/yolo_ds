@@ -389,6 +389,10 @@ int main(int argc, char *argv[]) {
 
     g_list_free_full(g_list_first(temp), g_free);
 
+    GstElement *custom_plugin = gst_element_factory_make("nvdsvideotemplate", "cutom-plugin");
+
+    if (!custom_plugin) {return -1;}
+
     pgie = gst_element_factory_make("nvinfer", "primary-nvinference-engine");
     nvtracker = gst_element_factory_make("nvtracker", "tracker");
 
@@ -437,6 +441,7 @@ int main(int argc, char *argv[]) {
     RETURN_ON_PARSER_ERROR(nvds_parse_osd(nvosd, argv[1], "osd"));
 
     g_object_set(G_OBJECT(nvosd), "display-text", 1, "process-mode", 1, NULL);
+    g_object_set(G_OBJECT(custom_plugin), "customlib-name", "/opt/nvidia/deepstream/deepstream/sources/gst-plugins/gst-nvdsvideotemplate/customlib_impl/libcustom_videoimpl.so", NULL);
 
     tiler_rows = (guint) sqrt(num_sources);
     tiler_columns = (guint) ceil(1.0 * num_sources / tiler_rows);
@@ -469,11 +474,11 @@ int main(int argc, char *argv[]) {
     gst_object_unref(bus);
 
     gst_bin_add_many(GST_BIN(pipeline), queue1, pgie, queue2, nvtracker, nvdslogger, tiler,
-                     queue3, nvvidconv, queue4, nvosd, queue5, sink, NULL);
+                     queue3, nvvidconv, queue4, custom_plugin, nvosd, queue5, sink, NULL);
 
     // Linking order strictly maintained
     if (!gst_element_link_many(streammux, queue1, pgie, queue2, nvtracker, nvdslogger, tiler,
-                               queue3, nvvidconv, queue4, nvosd, queue5, sink, NULL)) {
+                               queue3, nvvidconv, queue4, custom_plugin, nvosd, queue5, sink, NULL)) {
         g_printerr("Elements could not be linked. Exiting.\n");
         return -1;
     }
