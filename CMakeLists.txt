@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20) # 3.20+ is highly recommended for modern CUDA support
 
-set(CMAKE_CUDA_COMPILER "/usr/local/cuda/bin/nvcc")
+set(CMAKE_CUDA_COMPILER "/usr/local/cuda-12.8/bin/nvcc")
 
 set(PROJECT_N yolo_ds)
 project(${PROJECT_N} VERSION 1.0 LANGUAGES C CXX CUDA)
@@ -16,7 +16,7 @@ file(GLOB_RECURSE SRCS
         ${PROJECT_SOURCE_DIR}/src/*.cu
 )
 
-# Your macro that gets all of the header containing directories.
+# Your macro that gets all of the header containing di ectories.
 MACRO(header_directories return_list includes_base_folder extention )
     FILE(GLOB_RECURSE new_list ${includes_base_folder}/*.${extention})
     SET(dir_list "")
@@ -45,7 +45,10 @@ find_library(NVDS_META_LIB NAMES nvds_meta PATHS ${DS_LIB_DIR} REQUIRED)
 find_library(NVDS_YML_PARSER_LIB NAMES nvds_yml_parser PATHS ${DS_LIB_DIR} REQUIRED)
 find_library(NVDSGST_HELPER_LIB NAMES nvdsgst_helper PATHS ${DS_LIB_DIR} REQUIRED)
 
-add_executable(${PROJECT_N} ${SRCS})
+add_executable(${PROJECT_N} ${SRCS}
+        src/main.cpp
+        test/transit_utils.h
+)
 
 target_compile_definitions(${PROJECT_N} PRIVATE
         CONFIG_DIR="${PROJECT_SOURCE_DIR}/include"
