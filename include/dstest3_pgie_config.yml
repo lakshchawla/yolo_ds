@@ -9,7 +9,7 @@ property:
   process-mode: 1
   model-color-format: 0
   ## 0: FP32, 1: INT8, 2: FP16 mode
-  network-mode: 1
+  network-mode: 2
   num-detected-classes: 4
   interval: 0
   gie-unique-id: 1
