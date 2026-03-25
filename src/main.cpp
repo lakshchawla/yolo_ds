@@ -48,7 +48,7 @@
 #define DEPTH_REFERENCE_X 0.0
 #define DEPTH_REFERENCE_Y 0.0
 
-#define SAVE_DIR "/home/lab314/Desktop/metadata_logs/"
+#define SAVE_DIR "/home/lab314/Desktop/metadata_logs"
 #define SAVE_FLOW_DATA 1
 
 #define RETURN_ON_PARSER_ERROR(parse_expr)                    \
@@ -245,27 +245,49 @@ const gint MAX_QUEUE_SIZE = (FPS * BANDWIDTH_SECS);
 gint8 initial_frame_check = 0;
 // Dummy placeholder for your 'd' calculation function
 
-gdouble calculate_d(gdouble xf, gdouble yf, gdouble xo, gdouble yo, gdouble width, gdouble height)
+// gdouble calculate_d(gdouble xf, gdouble yf, gdouble xo, gdouble yo, gdouble width, gdouble height)
+// {
+//     // 1. Calculate the Euclidean distance from the object to the farthest point
+//     gdouble distance = std::sqrt(std::pow(xo - xf, 2) + std::pow(yo - yf, 2));
+//
+//     // 2. Calculate distances to the four corners of the image to find the maximum possible distance
+//     gdouble d_tl = std::sqrt(std::pow(0.0 - xf, 2) + std::pow(0.0 - yf, 2));       // Top-Left
+//     gdouble d_tr = std::sqrt(std::pow(width - xf, 2) + std::pow(0.0 - yf, 2));     // Top-Right
+//     gdouble d_bl = std::sqrt(std::pow(0.0 - xf, 2) + std::pow(height - yf, 2));    // Bottom-Left
+//     gdouble d_br = std::sqrt(std::pow(width - xf, 2) + std::pow(height - yf, 2));  // Bottom-Right
+//
+//     // 3. Find the maximum of those four corner distances
+//     gdouble max_dist = std::max({d_tl, d_tr, d_bl, d_br});
+//
+//     // 4. Prevent division by zero (edge case fallback)
+//     if (max_dist == 0.0) {
+//         return 1.0;
+//     }
+//
+//     // 5. Calculate and return the normalized depth constant
+//     return 1.0 - (distance / max_dist);
+// }
+
+
+gdouble calculate_depth_compensation(gdouble y, gdouble frame_height,
+                                     gdouble horizon_y_ratio = 0.33)
 {
-    // 1. Calculate the Euclidean distance from the object to the farthest point
-    gdouble distance = std::sqrt(std::pow(xo - xf, 2) + std::pow(yo - yf, 2));
+    // Horizon line: objects above this are considered "at infinity"
+    gdouble horizon_y = frame_height * horizon_y_ratio;
 
-    // 2. Calculate distances to the four corners of the image to find the maximum possible distance
-    gdouble d_tl = std::sqrt(std::pow(0.0 - xf, 2) + std::pow(0.0 - yf, 2));       // Top-Left
-    gdouble d_tr = std::sqrt(std::pow(width - xf, 2) + std::pow(0.0 - yf, 2));     // Top-Right
-    gdouble d_bl = std::sqrt(std::pow(0.0 - xf, 2) + std::pow(height - yf, 2));    // Bottom-Left
-    gdouble d_br = std::sqrt(std::pow(width - xf, 2) + std::pow(height - yf, 2));  // Bottom-Right
+    // Ground plane: object foot point relative to horizon
+    gdouble ground_span = frame_height - horizon_y;  // pixels from horizon to bottom
 
-    // 3. Find the maximum of those four corner distances
-    gdouble max_dist = std::max({d_tl, d_tr, d_bl, d_br});
+    // Clamp y to valid range
+    gdouble clamped_y = std::max(y, horizon_y);
 
-    // 4. Prevent division by zero (edge case fallback)
-    if (max_dist == 0.0) {
-        return 1.0;
-    }
+    // Normalized depth: 0 = at horizon (far), 1 = at bottom (close)
+    gdouble norm_depth = (clamped_y - horizon_y) / ground_span;
 
-    // 5. Calculate and return the normalized depth constant
-    return 1.0 - (distance / max_dist);
+    // Compensation: distant objects get higher multiplier
+    // At horizon → multiplier is large; at bottom → multiplier is 1.0
+    gdouble epsilon = 0.05;  // prevents division by zero near horizon
+    return 1.0 / (norm_depth + epsilon);
 }
 
 void save_history_to_disk(guint stream_id, const std::deque<FrameAggregatedStats>& feed, const std::string& base_path)
@@ -357,9 +379,14 @@ osd_analytics_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer u_da
             curr_pt.y = obj_meta->rect_params.top + obj_meta->rect_params.height;
             curr_frame_data[id] = curr_pt;
 
-            gdouble d = calculate_d(
-            (gfloat)frame_meta->source_frame_width/2, (gfloat)frame_meta->source_frame_height/2, curr_pt.x, curr_pt.y, frame_meta->source_frame_width, frame_meta->source_frame_height
-            );
+            // gdouble d = calculate_d(
+            // (gfloat)frame_meta->source_frame_width/2, (gfloat)frame_meta->source_frame_height/2, curr_pt.x, curr_pt.y, frame_meta->source_frame_width, frame_meta->source_frame_height
+            // );
+
+            gdouble d = calculate_depth_compensation(
+    curr_pt.y,   // foot point Y — already set as top + height
+    frame_meta->source_frame_height
+);
 
 
             g_print("Depth = %f \n", (gfloat)d);
@@ -369,7 +396,7 @@ osd_analytics_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer u_da
                 float dx = curr_pt.x - prev_pt.x;
                 float dy = curr_pt.y - prev_pt.y;
 
-                gdouble speed = std::sqrt(dx * dx + dy * dy);
+                gdouble speed = std::sqrt(dx * dx + dy * dy) * d;
                 gdouble angle = std::atan2(dy, dx);
 
                 current_frame_speeds.push_back(speed);
