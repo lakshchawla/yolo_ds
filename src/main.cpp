@@ -48,6 +48,9 @@
 #define DEPTH_REFERENCE_X 0.0
 #define DEPTH_REFERENCE_Y 0.0
 
+#define SAVE_DIR "/home/lab314/Desktop/metadata_logs/"
+#define SAVE_FLOW_DATA 1
+
 #define RETURN_ON_PARSER_ERROR(parse_expr)                    \
 if (NVDS_YAML_PARSER_SUCCESS != parse_expr) {                 \
 g_printerr("Error in parsing configuration file.\n");         \
@@ -358,14 +361,15 @@ osd_analytics_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer u_da
             (gfloat)frame_meta->source_frame_width/2, (gfloat)frame_meta->source_frame_height/2, curr_pt.x, curr_pt.y, frame_meta->source_frame_width, frame_meta->source_frame_height
             );
 
-            // g_print("Depth = %f \n", (gfloat)d);
+
+            g_print("Depth = %f \n", (gfloat)d);
             if (g_prev_frame_data.count(id))
             {
                 Point prev_pt = g_prev_frame_data[id];
                 float dx = curr_pt.x - prev_pt.x;
                 float dy = curr_pt.y - prev_pt.y;
 
-                gdouble speed = std::sqrt(dx * dx + dy * dy) * d;
+                gdouble speed = std::sqrt(dx * dx + dy * dy);
                 gdouble angle = std::atan2(dy, dx);
 
                 current_frame_speeds.push_back(speed);
@@ -411,7 +415,9 @@ osd_analytics_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer u_da
 
     if (g_temporal_feed.size() > MAX_QUEUE_SIZE)
     {
-        save_history_to_disk(0, g_temporal_feed, "/home/lab314/Desktop/metadata_logs");
+#ifdef SAVE_FLOW_DATA
+        save_history_to_disk(0, g_temporal_feed, SAVE_DIR);
+#endif
         g_temporal_feed.clear(); // Clear the queue after saving to avoid duplicate writes
     }
 
