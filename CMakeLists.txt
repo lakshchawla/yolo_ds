@@ -9,15 +9,15 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_CUDA_ARCHITECTURES "native") # Optimizes CUDA kernels for your specific GPU
 
-# Added *.c to catch the standard DeepStream C files along with your C++ files
+# Catch the standard DeepStream C files along with your C++ and CUDA files
 file(GLOB_RECURSE SRCS
         ${PROJECT_SOURCE_DIR}/src/*.cpp
         ${PROJECT_SOURCE_DIR}/src/*.c
         ${PROJECT_SOURCE_DIR}/src/*.cu
 )
 
-# Your macro that gets all of the header containing di ectories.
-MACRO(header_directories return_list includes_base_folder extention )
+# Macro that gets all of the header containing directories.
+MACRO(header_directories return_list includes_base_folder extention)
     FILE(GLOB_RECURSE new_list ${includes_base_folder}/*.${extention})
     SET(dir_list "")
     FOREACH(file_path ${new_list})
@@ -35,18 +35,19 @@ pkg_check_modules(GST REQUIRED gstreamer-1.0)
 
 find_package(CUDAToolkit REQUIRED)
 
-set(NVDS_VERSION "7.1")
+set(NVDS_VERSION "8.0")
 set(DS_DIR "/opt/nvidia/deepstream/deepstream-${NVDS_VERSION}")
-set(DS_INCLUDE_DIR "${DS_DIR}/sources/includes") # Replaces -I../../../includes
-set(DS_LIB_DIR "${DS_DIR}/lib")                  # Replaces LIB_INSTALL_DIR
+set(DS_INCLUDE_DIR "${DS_DIR}/sources/includes")
+set(DS_LIB_DIR "${DS_DIR}/lib")
 
+# Find DeepStream libraries
 find_library(NVDSGST_META_LIB NAMES nvdsgst_meta PATHS ${DS_LIB_DIR} REQUIRED)
 find_library(NVDS_META_LIB NAMES nvds_meta PATHS ${DS_LIB_DIR} REQUIRED)
 find_library(NVDS_YML_PARSER_LIB NAMES nvds_yml_parser PATHS ${DS_LIB_DIR} REQUIRED)
-find_library(NVDSGST_HELPER_LIB NAMES nvdsgst_helper PATHS ${DS_LIB_DIR} REQUIRED)
+find_library(NVDSGST_HELPER_LIB NAMES nvdsgst_helper PATHS ${DS_LIB_DIR} REQUIRED) # Fixed typo here
 
-add_executable(${PROJECT_N} ${SRCS}
-        src/main.cpp
+add_executable(${PROJECT_N}
+        ${SRCS}
         test/transit_utils.h
 )
 
@@ -86,5 +87,3 @@ message("include directories:")
 foreach(dir ${INCLUDES})
     message(STATUS ${dir})
 endforeach()
-
-

@@ -19,6 +19,7 @@
 #include <cmath>
 #include <vector>
 #include <algorithm>
+#include <filesystem>
 
 #include <fstream>
 #include <iomanip>
@@ -26,10 +27,12 @@
 
 #include "gst-nvmessage.h"
 #include "gstnvdsmeta.h"
+#include "gstnvdsinfer.h"
 #include "nvds_analytics_meta.h"
 // #ifndef PLATFORM_TEGRA
 #include "gst-nvmessage.h"
 #include "nvds_yml_parser.h"
+#include<array>
 
 #include <chrono>
 
@@ -48,8 +51,8 @@
 #define DEPTH_REFERENCE_X 0.0
 #define DEPTH_REFERENCE_Y 0.0
 
-#define SAVE_DIR "/home/lab314/Desktop/metadata_logs"
-#define SAVE_FLOW_DATA 1
+#define SAVE_DIR "/home/lab314/Desktop/metadata_logs/test"
+#define VECTOR_CALCULATION 0
 
 #define RETURN_ON_PARSER_ERROR(parse_expr)                    \
 if (NVDS_YAML_PARSER_SUCCESS != parse_expr) {                 \
@@ -168,6 +171,8 @@ decodebin_child_added(GstChildProxy* child_proxy, GObject* object,
 static GstElement*
 create_source_bin(guint index, gchar* uri)
 {
+    g_print("%s", uri);
+
     GstElement *bin = NULL, *uri_decode_bin = NULL;
     gchar bin_name[16] = {};
 
@@ -192,6 +197,8 @@ create_source_bin(guint index, gchar* uri)
     }
 
     g_object_set(G_OBJECT(uri_decode_bin), "uri", uri, NULL);
+
+    // std::string uri = g_object_get(G_OBJECT(uri_decode_bin), ("uri");
 
     g_signal_connect(G_OBJECT(uri_decode_bin), "pad-added",
                      G_CALLBACK(cb_newpad), bin);
@@ -276,7 +283,7 @@ gdouble calculate_depth_compensation(gdouble y, gdouble frame_height,
     gdouble horizon_y = frame_height * horizon_y_ratio;
 
     // Ground plane: object foot point relative to horizon
-    gdouble ground_span = frame_height - horizon_y;  // pixels from horizon to bottom
+    gdouble ground_span = frame_height - horizon_y; // pixels from horizon to bottom
 
     // Clamp y to valid range
     gdouble clamped_y = std::max(y, horizon_y);
@@ -286,7 +293,7 @@ gdouble calculate_depth_compensation(gdouble y, gdouble frame_height,
 
     // Compensation: distant objects get higher multiplier
     // At horizon → multiplier is large; at bottom → multiplier is 1.0
-    gdouble epsilon = 0.05;  // prevents division by zero near horizon
+    gdouble epsilon = 0.05; // prevents division by zero near horizon
     return 1.0 / (norm_depth + epsilon);
 }
 
@@ -344,6 +351,130 @@ void save_history_to_disk(guint stream_id, const std::deque<FrameAggregatedStats
     }
 }
 
+// static GstPadProbeReturn reid_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer user_data)
+// {
+// GstBuffer *buf = (GstBuffer *)info->data;
+//     NvDsBatchMeta *batch_meta = gst_buffer_get_nvds_batch_meta(buf);
+//
+//     if (!batch_meta) return GST_PAD_PROBE_OK;
+//
+//
+//     // 1. Iterate through Frames
+//     for (NvDsMetaList *l_frame = batch_meta->frame_meta_list; l_frame != NULL; l_frame = l_frame->next) {
+//         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)l_frame->data;
+//
+//         // 2. Check for Frame-Level Custom Data
+//         for (NvDsMetaList *l_user = frame_meta->frame_user_meta_list; l_user != NULL; l_user = l_user->next) {
+//             NvDsUserMeta *user_meta = (NvDsUserMeta *)l_user->data;
+//             // CORRECTED: Access meta_type through base_meta
+//         }
+//
+//         // 3. Iterate through Objects in the Frame
+//         for (NvDsMetaList *l_obj = frame_meta->obj_meta_list; l_obj != NULL; l_obj = l_obj->next) {
+//             NvDsObjectMeta *obj_meta = (NvDsObjectMeta *)l_obj->data;
+//             // g_print("  [Object %lu] Class: %d, Conf: %.2f, BBox: [%.1f, %.1f, %.1f, %.1f]\n",
+//             //         obj_meta->object_id, obj_meta->class_id, obj_meta->confidence,
+//             //         obj_meta->rect_params.left, obj_meta->rect_params.top,
+//             //         obj_meta->rect_params.width, obj_meta->rect_params.height);
+//
+//             // 4. Check for Object-Level Custom Data
+//             for (NvDsMetaList *l_user = obj_meta->obj_user_meta_list; l_user != NULL; l_user = l_user->next) {
+//                 NvDsUserMeta *user_meta = (NvDsUserMeta *)l_user->data;
+//
+//                 g_print("%d", user_meta->base_meta.meta_type);
+//
+//                 // NVDSINFER_TENSOR_OUTPUT_META *t_meta = NULL;
+//
+//                 if (user_meta->base_meta.meta_type == NVDSINFER_TENSOR_OUTPUT_META) {
+//                     NvDsInferTensorMeta *tensor_meta = (NvDsInferTensorMeta *)user_meta->user_meta_data;
+//
+//                     // Assuming your ReID network has 1 output layer
+//                     float *embedding_vector = (float *)tensor_meta->out_buf_ptrs_host[0];
+//
+//                     // You can get the dimensions to know the vector length (e.g., 256)
+//                     NvDsInferDims embedding_dims = tensor_meta->output_layers_info[0].inferDims;
+//                     int vector_length = embedding_dims.d[0];
+//
+//                     g_print("Embedding vector %d \n" , vector_length);
+//                 }
+//             }
+//         }
+//     }
+//
+//     return GST_PAD_PROBE_OK;
+// }
+
+
+struct FrameMap {
+    static constexpr int WIDTH = 160;
+    static constexpr int HEIGHT = 90;
+
+    std::array<uint16_t, WIDTH * HEIGHT> data;
+
+    FrameMap() { data.fill(0); }
+    void set_pixel(int x, int y, uint16_t id) {
+        if (x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT) {
+            data[y * WIDTH + x] = (id & 0xFF) << 8;
+        }
+    }
+};
+
+
+static GstPadProbeReturn reid_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer user_data)
+{
+    GstBuffer* buffer = (GstBuffer*)info->data;
+    NvDsBatchMeta* batch_meta = gst_buffer_get_nvds_batch_meta(buffer);
+
+
+    for (NvDsMetaList* l_frame = batch_meta->frame_meta_list; l_frame != NULL; l_frame = l_frame->next)
+    {
+        FrameMap* current_frame_map;
+        NvDsFrameMeta* frame_meta = (NvDsFrameMeta*)(l_frame->data);
+
+        for (NvDsMetaList* l_obj = frame_meta->obj_meta_list; l_obj != NULL; l_obj = l_obj->next)
+        {
+            NvDsObjectMeta* obj_meta = (NvDsObjectMeta*)(l_obj->data);
+
+            // current_frame_map->set_pixel(
+            //     static_cast<int>(obj_meta->rect_params.left/12),
+            //     static_cast<int>(obj_meta->rect_params.top/12),
+            //     static_cast<uint16_t>(obj_meta->object_id));
+            //
+            // // g_print("%f, ", (obj_meta->rect_params.left + (obj_meta->rect_params.width / 2)/12));
+            // // g_print("%f, ", (obj_meta->rect_params.top + obj_meta->rect_params.height)/12);
+            // // g_print("%ld \n", obj_meta->object_id);
+            //
+            // g_print("%d, ", (int)obj_meta->rect_params.left/12);
+            // g_print("%d, ", (int)obj_meta->rect_params.top/12);
+            // g_print("%ld \n", obj_meta->object_id);
+
+            for (NvDsMetaList *l_user = obj_meta->obj_user_meta_list; l_user != NULL; l_user = l_user->next) {
+                NvDsUserMeta *user_meta = (NvDsUserMeta *)l_user->data;
+
+                if (user_meta->base_meta.meta_type == NVDSINFER_TENSOR_OUTPUT_META) {
+                    NvDsInferTensorMeta *tensor_meta = (NvDsInferTensorMeta *)user_meta->user_meta_data;
+
+                    // Assuming your ReID network has 1 output layer
+
+                    float *embedding_vector = (float *)tensor_meta->out_buf_ptrs_host[0];
+
+                    g_print("%ld \n", embedding_vector);
+                    // You can get the dimensions to know the vector length (e.g., 256)
+                    // NvDsInferDims embedding_dims = tensor_meta->output_layers_info[0].inferDims;
+                    // int vector_length = embedding_dims.d[0];
+                }
+            }
+        }
+
+
+    }
+
+    return GST_PAD_PROBE_OK;
+}
+
+
+
+
 static GstPadProbeReturn
 osd_analytics_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer u_data)
 {
@@ -384,12 +515,12 @@ osd_analytics_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer u_da
             // );
 
             gdouble d = calculate_depth_compensation(
-    curr_pt.y,   // foot point Y — already set as top + height
-    frame_meta->source_frame_height
-);
+                curr_pt.y, // foot point Y — already set as top + height
+                frame_meta->source_frame_height
+            );
 
 
-            g_print("Depth = %f \n", (gfloat)d);
+            // g_print("Depth = %f \n", (gfloat)d);
             if (g_prev_frame_data.count(id))
             {
                 Point prev_pt = g_prev_frame_data[id];
@@ -442,9 +573,7 @@ osd_analytics_pad_buffer_probe(GstPad* pad, GstPadProbeInfo* info, gpointer u_da
 
     if (g_temporal_feed.size() > MAX_QUEUE_SIZE)
     {
-#ifdef SAVE_FLOW_DATA
         save_history_to_disk(0, g_temporal_feed, SAVE_DIR);
-#endif
         g_temporal_feed.clear(); // Clear the queue after saving to avoid duplicate writes
     }
 
@@ -458,14 +587,17 @@ int main(int argc, char* argv[])
 {
     GMainLoop* loop = NULL;
     GstElement *pipeline = NULL, *streammux = NULL, *sink = NULL, *pgie = NULL,
-               *queue1, *queue2, *queue3, *queue4, *queue5, *nvvidconv = NULL,
+               *nvvidconv = NULL,
                *nvosd = NULL, *tiler = NULL, *nvdslogger = NULL, *nvtracker = NULL;
     // GstElement *nvdsanalytics = NULL, *nvdsananalytics = NULL;
 
+    GstElement *queue1, *queue2, *queue3, *queue4, *queue5, *queue6;
+    GstElement* sgie1 = NULL;
     Point* depth_reference = NULL;
 
     GstBus* bus = NULL;
     GstPad* osd_sink_pad = NULL;
+    GstPad* reid_sgie_pad = NULL;
     guint bus_watch_id;
     guint i = 0, num_sources = 0;
     guint tiler_rows, tiler_columns;
@@ -492,6 +624,7 @@ int main(int argc, char* argv[])
     yaml_config = (g_str_has_suffix(argv[1], ".yml") || g_str_has_suffix(argv[1], ".yaml"));
 
     RETURN_ON_PARSER_ERROR(nvds_parse_gie_type(&pgie_type, argv[1], "primary-gie"));
+    RETURN_ON_PARSER_ERROR(nvds_parse_gie_type(&pgie_type, argv[1], "secondary-gie-1"));
 
     pipeline = gst_pipeline_new("dstest3-pipeline");
     streammux = gst_element_factory_make("nvstreammux", "stream-muxer");
@@ -554,11 +687,10 @@ int main(int argc, char* argv[])
 
     g_list_free_full(g_list_first(temp), g_free);
 
-    GstElement* custom_plugin = gst_element_factory_make("nvdsvideotemplate", "cutom-plugin");
-
-    if (!custom_plugin) { return -1; }
+    // GstElement* custom_plugin = gst_element_factory_make("nvdsvideotemplate", "cutom-plugin");
 
     pgie = gst_element_factory_make("nvinfer", "primary-nvinference-engine");
+    sgie1 = gst_element_factory_make("nvinfer", "secondary-nvinference-engine-1");
     nvtracker = gst_element_factory_make("nvtracker", "tracker");
 
     queue1 = gst_element_factory_make("queue", "queue1");
@@ -566,6 +698,7 @@ int main(int argc, char* argv[])
     queue3 = gst_element_factory_make("queue", "queue3");
     queue4 = gst_element_factory_make("queue", "queue4");
     queue5 = gst_element_factory_make("queue", "queue5");
+    queue6 = gst_element_factory_make("queue", "queue6");
 
     nvdslogger = gst_element_factory_make("nvdslogger", "nvdslogger");
     tiler = gst_element_factory_make("nvmultistreamtiler", "nvtiler");
@@ -592,7 +725,7 @@ int main(int argc, char* argv[])
         }
     }
 
-    if (!pgie || !nvdslogger || !tiler || !nvvidconv || !nvosd || !sink || !nvtracker)
+    if (!pgie || !sgie1 || !nvdslogger || !tiler || !nvvidconv || !nvosd || !sink || !nvtracker)
     {
         g_printerr("One element could not be created. Exiting.\n");
         return -1;
@@ -600,8 +733,10 @@ int main(int argc, char* argv[])
 
     RETURN_ON_PARSER_ERROR(nvds_parse_streammux(streammux, argv[1], "streammux"));
     RETURN_ON_PARSER_ERROR(nvds_parse_gie(pgie, argv[1], "primary-gie"));
+    RETURN_ON_PARSER_ERROR(nvds_parse_gie(sgie1, argv[1], "secondary-gie-1"));
 
     g_object_get(G_OBJECT(pgie), "batch-size", &pgie_batch_size, NULL);
+    g_object_get(G_OBJECT(sgie1), "batch-size", &pgie_batch_size, NULL);
     if (pgie_batch_size != num_sources)
     {
         g_printerr("WARNING: Overriding infer-config batch-size (%d) with number of sources (%d)\n",
@@ -609,21 +744,16 @@ int main(int argc, char* argv[])
         g_object_set(G_OBJECT(pgie), "batch-size", num_sources, NULL);
     }
 
-    // YAML Parser handles the tracker logic cleanly here
     RETURN_ON_PARSER_ERROR(nvds_parse_tracker(nvtracker, argv[1], "tracker"));
     RETURN_ON_PARSER_ERROR(nvds_parse_osd(nvosd, argv[1], "osd"));
 
     g_object_set(G_OBJECT(nvosd), "display-text", 1, "process-mode", 1, NULL);
-    g_object_set(G_OBJECT(custom_plugin), "customlib-name",
-                 "/opt/nvidia/deepstream/deepstream/sources/gst-plugins/gst-nvdsvideotemplate/customlib_impl/libcustom_videoimpl.so",
-                 NULL);
 
     tiler_rows = (guint)sqrt(num_sources);
     tiler_columns = (guint)ceil(1.0 * num_sources / tiler_rows);
     g_object_set(G_OBJECT(tiler), "rows", tiler_rows, "columns", tiler_columns, NULL);
 
     RETURN_ON_PARSER_ERROR(nvds_parse_tiler(tiler, argv[1], "tiler"));
-
 
 
     if (PERF_MODE)
@@ -659,12 +789,10 @@ int main(int argc, char* argv[])
     bus_watch_id = gst_bus_add_watch(bus, bus_call, loop);
     gst_object_unref(bus);
 
-    gst_bin_add_many(GST_BIN(pipeline), queue1, pgie, queue2, nvtracker, nvdslogger,
-                     queue3, nvvidconv, queue4, custom_plugin, nvosd, queue5, sink, NULL);
-
-    // Linking order strictly maintained
-    if (!gst_element_link_many(streammux, queue1, pgie, queue2, nvtracker, nvdslogger,
-                               queue3, nvvidconv, queue4, custom_plugin, nvosd, queue5, sink, NULL))
+    gst_bin_add_many(GST_BIN(pipeline), queue1, pgie, queue6, sgie1,  queue2, nvtracker, nvdslogger, queue3, nvvidconv,
+                     queue4, nvosd, queue5, sink, NULL);
+    if (!gst_element_link_many(streammux, queue1, pgie, queue6, sgie1,  queue2, nvtracker, nvdslogger, queue3, nvvidconv,
+                               queue4, nvosd, queue5, sink, NULL))
     {
         g_printerr("Elements could not be linked. Exiting.\n");
         return -1;
@@ -682,6 +810,19 @@ int main(int argc, char* argv[])
                           osd_analytics_pad_buffer_probe, NULL, NULL);
         gst_object_unref(osd_sink_pad);
     }
+
+    reid_sgie_pad = gst_element_get_static_pad(sink, "sink");
+    if (!reid_sgie_pad)
+    {
+        g_printerr("Pad could not be linked. Exiting.\n");
+        return -1;
+    }
+    else
+    {
+        gst_pad_add_probe(reid_sgie_pad, GST_PAD_PROBE_TYPE_BUFFER, reid_pad_buffer_probe, NULL, NULL);
+        gst_object_unref(reid_sgie_pad);
+    }
+
 
     g_print("Using file: %s\n", argv[1]);
     gst_element_set_state(pipeline, GST_STATE_PLAYING);

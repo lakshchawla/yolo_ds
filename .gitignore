@@ -1,1 +1,4 @@
 build/*
+models/*
+cmake-build-debug/*
+CMakeLists.txt
