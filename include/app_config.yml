@@ -1,27 +1,27 @@
 source-list:
-  list: file:///home/lab314/output.mp4;
-#  list: rtsp://admin:123456@192.168.3.123/stream0;
+  list: file:///home/lab314/Desktop/camera1_recording.mp4;file:///home/lab314/Desktop/camera2_recording.mp4;
+#  list: file:///dev/video2;
 
 streammux:
-  batch-size: 1
+  batch-size: 2
   batched-push-timeout: 40000
   width: 1920
   height: 1080
 
 tiler:
-  width: 1280
-  height: 720
+  width: 1792
+  height: 504
 
 sink:
   qos: 0
 
 primary-gie:
   plugin-type: 0
-  config-file-path: /home/lab314/workspace/DeepStream-Yolo/config_infer_primary_yoloV8.yml
-#  config-file-path: /home/lab314/workspace/yolo_ds/include/dstest3_pgie_config.yml
+#  config-file-path: /home/lab314/workspace/DeepStream-Yolo/config_infer_primary_yoloV8.yml
+  config-file-path: /home/lab314/workspace/yolo_ds/include/dstest3_pgie_config.yml
 
 secondary-gie-1:
-  plugin-type: 0
+  plugin-type: 1
   config-file-path: /home/lab314/workspace/yolo_ds/include/sgie_config.yml
 
 tracker:
@@ -32,8 +32,8 @@ tracker:
   display-tracking-id: 1
   ll-lib-file: /opt/nvidia/deepstream/deepstream/lib/libnvds_nvmultiobjecttracker.so
 #  ll-config-file: /opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_NvSORT.yml
-#  ll-config-file: /opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_IOU.yml
-  ll-config-file: /opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_NvDCF_perf.yml
+  ll-config-file: /opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_IOU.yml
+#  ll-config-file: /opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_NvDCF_perf.yml
 #  ll-config-file: /opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_NvDCF_accuracy.yml
 #  ll-config-file: /opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_NvDeepSORT.yml
 

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20) # 3.20+ is highly recommended for modern CUDA support
+cmake_minimum_required(VERSION 3.20)
 
 set(CMAKE_CUDA_COMPILER "/usr/local/cuda-12.8/bin/nvcc")
 
@@ -7,16 +7,22 @@ project(${PROJECT_N} VERSION 1.0 LANGUAGES C CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-set(CMAKE_CUDA_ARCHITECTURES "native") # Optimizes CUDA kernels for your specific GPU
+set(CMAKE_CUDA_ARCHITECTURES "native")
 
-# Catch the standard DeepStream C files along with your C++ and CUDA files
 file(GLOB_RECURSE SRCS
         ${PROJECT_SOURCE_DIR}/src/*.cpp
         ${PROJECT_SOURCE_DIR}/src/*.c
         ${PROJECT_SOURCE_DIR}/src/*.cu
 )
 
-# Macro that gets all of the header containing directories.
+# --- NEW: Find Paho MQTT C Library ---
+# This looks for libpaho-mqtt3c.so on your system
+find_library(PAHO_MQTT_LIB NAMES paho-mqtt3c REQUIRED)
+
+# --- NEW: Find X11 (Required for deepstream-test5 windowing) ---
+find_package(X11 REQUIRED)
+
+# Macro for headers
 MACRO(header_directories return_list includes_base_folder extention)
     FILE(GLOB_RECURSE new_list ${includes_base_folder}/*.${extention})
     SET(dir_list "")
@@ -31,10 +37,12 @@ ENDMACRO()
 header_directories(INCLUDES ${PROJECT_SOURCE_DIR}/include/ hpp)
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(GST REQUIRED gstreamer-1.0)
+# Added gstreamer-video-1.0 for overlay support
+pkg_check_modules(GST REQUIRED gstreamer-1.0 gstreamer-video-1.0)
 
 find_package(CUDAToolkit REQUIRED)
 
+# Note: Ensure your DS_VERSION matches your installed path (e.g., 7.1 or 8.0)
 set(NVDS_VERSION "8.0")
 set(DS_DIR "/opt/nvidia/deepstream/deepstream-${NVDS_VERSION}")
 set(DS_INCLUDE_DIR "${DS_DIR}/sources/includes")
@@ -44,11 +52,14 @@ set(DS_LIB_DIR "${DS_DIR}/lib")
 find_library(NVDSGST_META_LIB NAMES nvdsgst_meta PATHS ${DS_LIB_DIR} REQUIRED)
 find_library(NVDS_META_LIB NAMES nvds_meta PATHS ${DS_LIB_DIR} REQUIRED)
 find_library(NVDS_YML_PARSER_LIB NAMES nvds_yml_parser PATHS ${DS_LIB_DIR} REQUIRED)
-find_library(NVDSGST_HELPER_LIB NAMES nvdsgst_helper PATHS ${DS_LIB_DIR} REQUIRED) # Fixed typo here
+find_library(NVDSGST_HELPER_LIB NAMES nvdsgst_helper PATHS ${DS_LIB_DIR} REQUIRED)
+# Added MsgBroker for protocol support if needed
+find_library(NVDS_MSGBROKER_LIB NAMES nvds_msgbroker PATHS ${DS_LIB_DIR} REQUIRED)
 
 add_executable(${PROJECT_N}
         ${SRCS}
         test/transit_utils.h
+        src/main.cpp
 )
 
 target_compile_definitions(${PROJECT_N} PRIVATE
@@ -59,7 +70,7 @@ target_include_directories(${PROJECT_N} PUBLIC
         ${PROJECT_SOURCE_DIR}/include
         ${GST_INCLUDE_DIRS}
         ${DS_INCLUDE_DIR}
-        # CUDAToolkit automatically attaches its own includes
+        ${X11_INCLUDE_DIR}
 )
 
 target_link_libraries(${PROJECT_N} PUBLIC
@@ -68,9 +79,12 @@ target_link_libraries(${PROJECT_N} PUBLIC
         ${NVDS_META_LIB}
         ${NVDS_YML_PARSER_LIB}
         ${NVDSGST_HELPER_LIB}
-        CUDA::cudart # Translates -lcudart
-        CUDA::cuda_driver   # Translates -lcuda
-        m            # Standard math library (Translates -lm)
+        ${NVDS_MSGBROKER_LIB}
+        ${PAHO_MQTT_LIB}
+        ${X11_LIBRARIES}
+        CUDA::cudart
+        CUDA::cuda_driver
+        m
 )
 
 set_target_properties(${PROJECT_N} PROPERTIES
@@ -78,12 +92,6 @@ set_target_properties(${PROJECT_N} PROPERTIES
         INSTALL_RPATH "${DS_LIB_DIR}"
 )
 
-message("src files:")
-foreach(file ${SRCS})
-    message(STATUS ${file})
-endforeach()
-
-message("include directories:")
-foreach(dir ${INCLUDES})
-    message(STATUS ${dir})
-endforeach()
+# --- DEBUG MESSAGES ---
+message(STATUS "Paho MQTT Lib: ${PAHO_MQTT_LIB}")
+message(STATUS "DeepStream Dir: ${DS_DIR}")
