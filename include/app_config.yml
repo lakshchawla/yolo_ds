@@ -1,15 +1,15 @@
 source-list:
-  list: file:///home/lab314/Desktop/camera1_recording.mp4;file:///home/lab314/Desktop/camera2_recording.mp4;
-#  list: file:///dev/video2;
+#  list: file:///home/lab314/Desktop/rendered/final_recording.mp4;file:///home/lab314/Desktop/rendered/final_recording.mp4;file:///home/lab314/Desktop/rendered/final_recording.mp4;file:///home/lab314/Desktop/rendered/final_recording.mp4;
+  list: rtsp://root:root@192.168.6.90/cam1/onvif-h264;
 
 streammux:
-  batch-size: 2
+  batch-size: 1
   batched-push-timeout: 40000
   width: 1920
   height: 1080
 
 tiler:
-  width: 1792
+  width: 896
   height: 504
 
 sink:
@@ -21,7 +21,7 @@ primary-gie:
   config-file-path: /home/lab314/workspace/yolo_ds/include/dstest3_pgie_config.yml
 
 secondary-gie-1:
-  plugin-type: 1
+  plugin-type: 0
   config-file-path: /home/lab314/workspace/yolo_ds/include/sgie_config.yml
 
 tracker:

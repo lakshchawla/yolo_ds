@@ -41,6 +41,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(GST REQUIRED gstreamer-1.0 gstreamer-video-1.0)
 
 find_package(CUDAToolkit REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 # Note: Ensure your DS_VERSION matches your installed path (e.g., 7.1 or 8.0)
 set(NVDS_VERSION "8.0")
@@ -71,6 +72,7 @@ target_include_directories(${PROJECT_N} PUBLIC
         ${GST_INCLUDE_DIRS}
         ${DS_INCLUDE_DIR}
         ${X11_INCLUDE_DIR}
+        Eigen3::Eigen
 )
 
 target_link_libraries(${PROJECT_N} PUBLIC
